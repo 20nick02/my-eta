@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>海韻花園</title>
+  <title>深井巴士 ETA - 去程</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -25,10 +25,10 @@
     <!-- 標題 -->
     <header class="mb-3 border-b border-slate-700 pb-2">
       <h1 class="text-lg sm:text-xl font-bold text-cyan-400">
-        海韻花園
+        深井巴士 ETA
         <span id="headerTime" class="font-normal text-slate-400 text-sm ml-2">載入中...</span>
       </h1>
-      <p class="text-xs text-slate-500 mt-0.5">去程：海韻花園 → 荃灣 / 九龍 / 港島</p>
+      <p class="text-xs text-slate-500 mt-0.5">去程：海韻花園 / 深慈街 → 荃灣 / 九龍 / 港島 / 機場</p>
     </header>
 
     <!-- 去程列表 -->
@@ -54,18 +54,20 @@
 
   <script>
     // ========== 設定 ==========
-    const STOP_ID = "ED9E5ACF98190E5C";   // 海韻花園
+    const STOP_HAIYUN = "ED9E5ACF98190E5C";   // 海韻花園
+    const STOP_SHAMTSZ = "5A2A66038B409879";  // 深慈街
 
     const routes = [
-      { co: "kmb", route: "52X",  dest: "旺角",     serviceType: 1 },
-      { co: "kmb", route: "53",   dest: "元朗",     serviceType: 1 },
-      { co: "kmb", route: "234A", dest: "荃灣西",   serviceType: 1 },
-      { co: "kmb", route: "234B", dest: "荃灣西",   serviceType: 1 },
-      { co: "kmb", route: "234C", dest: "觀塘",     serviceType: 1 },
-      { co: "kmb", route: "234D", dest: "觀塘",     serviceType: 1 },
-      { co: "kmb", route: "261B", dest: "九龍站",   serviceType: 1 },
-      { co: "kmb", route: "48P",  dest: "火炭",     serviceType: 1 },
-      { co: "kmb", route: "52P",  dest: "深水埗",   serviceType: 1 },
+      { co: "kmb", route: "52X",  dest: "旺角",     stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "53",   dest: "元朗",     stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "234A", dest: "荃灣西",   stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "234B", dest: "荃灣西",   stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "234C", dest: "觀塘",     stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "234D", dest: "觀塘",     stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "261B", dest: "九龍站",   stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "48P",  dest: "火炭",     stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "52P",  dest: "深水埗",   stopId: STOP_HAIYUN, serviceType: 1 },
+      { co: "kmb", route: "A38",  dest: "機場",     stopId: STOP_SHAMTSZ, serviceType: 1 },  // 深慈街
       { co: "ctb", route: "952",  dest: "銅鑼灣",   stopId: "002618" },
     ];
 
@@ -117,7 +119,7 @@
 
     async function getEtas(item) {
       if (item.co === "kmb") {
-        return await fetchKmbEta(STOP_ID, item.route, item.serviceType || 1);
+        return await fetchKmbEta(item.stopId, item.route, item.serviceType || 1);
       }
       if (item.co === "ctb") {
         return await fetchCtbEta(item.stopId, item.route);
