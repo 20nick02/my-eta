@@ -3,37 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的屋苑巴士 ETA</title>
+  <title>海韻花園</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .eta-badge {
+      display: inline-block;
+      min-width: 2.2rem;
+      text-align: center;
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.35rem;
+      font-weight: 600;
+      margin-right: 0.3rem;
+      font-size: 0.95rem;
+    }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-2">
-  <div class="max-w-3xl mx-auto">
-    <h1 class="text-xl font-bold text-cyan-400 mb-2">
-      你的屋苑名稱 <span id="time" class="text-slate-300 font-normal text-base"></span>
-    </h1>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-2 sm:p-3">
 
-    <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700">
+  <div class="max-w-2xl mx-auto">
+    <!-- 標題 -->
+    <header class="mb-3 border-b border-slate-700 pb-2">
+      <h1 class="text-lg sm:text-xl font-bold text-cyan-400">
+        海韻花園
+        <span id="headerTime" class="font-normal text-slate-400 text-sm ml-2">載入中...</span>
+      </h1>
+      <p class="text-xs text-slate-500 mt-0.5">去程：海韻花園 → 荃灣 / 九龍 / 港島</p>
+    </header>
+
+    <!-- 去程列表 -->
+    <div class="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
       <table class="w-full text-sm">
-        <thead class="bg-slate-700 text-slate-200">
+        <thead class="bg-slate-700/70 text-slate-300 text-xs">
           <tr>
-            <th class="p-2 text-left">開往</th>
-            <th class="p-2 text-left">路線</th>
-            <th class="p-2 text-left">車站</th>
+            <th class="p-2 text-left w-[22%]">開往</th>
+            <th class="p-2 text-left w-[18%]">路線</th>
             <th class="p-2 text-left">分鐘</th>
           </tr>
         </thead>
-        <tbody id="etaBody">
-          <tr><td colspan="4" class="p-4 text-center text-slate-400">載入中...</td></tr>
+        <tbody id="etaBody" class="divide-y divide-slate-700">
+          <tr><td colspan="3" class="p-4 text-center text-slate-500">載入中...</td></tr>
         </tbody>
       </table>
     </div>
+
+    <footer class="text-center text-[11px] text-slate-600 mt-4">
+      資料來源：運輸署開放數據　｜　每 10 秒自動更新
+    </footer>
   </div>
 
   <script>
-    // 這裡放所有邏輯
+    // ========== 設定 ==========
+    const STOP_ID = "ED9E5ACF98190E5C";   // 海韻花園
+
+    const routes = [
+      { co: "kmb", route: "52X",  dest: "旺角",     serviceType: 1 },
+      { co: "kmb", route: "53",   dest: "元朗",     serviceType: 1 },
+      { co: "kmb", route: "234A", dest: "荃灣西",   serviceType: 1 },
+      { co: "kmb", route: "234B", dest: "荃灣西",   serviceType: 1 },
+      { co: "kmb", route: "234C", dest: "觀塘",     serviceType: 1 },
+      { co: "kmb", route: "234D", dest: "觀塘",     serviceType: 1 },
+      { co: "kmb", route: "261B", dest: "九龍站",   serviceType: 1 },
+      { co: "kmb", route: "48P",  dest: "火炭",     serviceType: 1 },
+      { co: "kmb", route: "52P",  dest: "深水埗",   serviceType: 1 },
+      { co: "ctb", route: "952",  dest: "銅鑼灣",   stopId: "002618" },
+    ];
+
+    // ========== 工具函式 ==========
+    function renderBadge(mins) {
+      let color = "bg-emerald-600";
+      if (mins <= 2) color = "bg-red-600";
+      else if (mins <= 5) color = "bg-amber-500";
+      return `<span class="eta-badge ${color} text-white">${mins}</span>`;
+    }
+
+    async function fetchKmbEta(stopId, route, serviceType = 1) {
+      try {
+        const url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${stopId}/${route}/${serviceType}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.data || [])
+          .filter(d => d.eta)
+          .map(d => {
+            const mins = Math.round((new Date(d.eta) - Date.now()) / 60000);
+            return mins >= 0 ? mins : null;
+          })
+          .filter(m => m !== null)
+          .slice(0, 3);
+      } catch {
+        return [];
+      }
+    }
+
+    async function fetchCtbEta(stopId, route) {
+      try {
+        const url = `https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${stopId}/${route}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.data || [])
+          .filter(d => d.eta)
+          .map(d => {
+            const mins = Math.round((new Date(d.eta) - Date.now()) / 60000);
+            return mins >= 0 ? mins : null;
+          })
+          .filter(m => m !== null)
+          .slice(0, 3);
+      } catch {
+        return [];
+      }
+    }
+
+    async function getEtas(item) {
+      if (item.co === "kmb") {
+        return await fetchKmbEta(STOP_ID, item.route, item.serviceType || 1);
+      }
+      if (item.co === "ctb") {
+        return await fetchCtbEta(item.stopId, item.route);
+      }
+      return [];
+    }
+
+    // ========== 主更新 ==========
+    async function update() {
+      const now = new Date();
+      document.getElementById("headerTime").textContent =
+        now.toLocaleString("zh-HK", { hour12: false });
+
+      const rows = await Promise.all(routes.map(async (item) => {
+        const etas = await getEtas(item);
+        if (etas.length === 0) return null;
+        return `
+          <tr class="hover:bg-slate-700/40">
+            <td class="p-2 text-slate-200">${item.dest}</td>
+            <td class="p-2">
+              <span class="inline-block bg-blue-600 text-white font-bold text-xs px-2 py-0.5 rounded">${item.route}</span>
+            </td>
+            <td class="p-2">${etas.map(m => renderBadge(m)).join("")}</td>
+          </tr>`;
+      }));
+
+      const html = rows.filter(Boolean).join("") ||
+        `<tr><td colspan="3" class="p-4 text-center text-slate-500">暫時無班次</td></tr>`;
+
+      document.getElementById("etaBody").innerHTML = html;
+    }
+
+    // 啟動
+    update();
+    setInterval(update, 10000);
   </script>
 </body>
 </html>
