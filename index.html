@@ -20,7 +20,6 @@
       margin-right: 0.25rem;
     }
 
-    /* 直向 */
     @media (orientation: portrait) {
       .page-title { font-size: 1.15rem; }
       .page-sub { font-size: 0.75rem; }
@@ -31,7 +30,6 @@
       .stop-info { font-size: 0.68rem; }
     }
 
-    /* 橫向 */
     @media (orientation: landscape) {
       body { padding: 0.35rem !important; }
       .page-title { font-size: 0.95rem; }
@@ -56,6 +54,18 @@
       </h1>
       <p class="page-sub text-slate-500 mt-0.5" id="locationStatus">正在取得位置...</p>
     </header>
+
+    <!-- 精準度選擇 -->
+    <div class="mb-2 flex items-center gap-2 text-xs">
+      <label class="text-slate-400 whitespace-nowrap">要求精準度 ≤</label>
+      <select id="accuracySelect" onchange="onAccuracyChange()"
+              class="bg-slate-700 text-slate-100 rounded px-2 py-1 border border-slate-600 flex-1">
+        <option value="100">100 米</option>
+        <option value="200" selected>200 米</option>
+        <option value="300">300 米</option>
+        <option value="400">400 米</option>
+      </select>
+    </div>
 
     <div class="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
       <table class="w-full">
@@ -87,26 +97,20 @@
   </div>
 
   <script>
-    // ========== 常用站點（含座標）==========
+    // ========== 常用站點 ==========
     const stops = {
-      // 海韻花園（東行）
       "ED9E5ACF98190E5C": { name: "海韻花園", lat: 22.367721, lng: 114.061674 },
       "1684F750FEB1342E": { name: "海韻花園", lat: 22.367790, lng: 114.061396 },
-      // 深慈街
       "5A2A66038B409879": { name: "深慈街", lat: 22.366847, lng: 114.063327 },
       "D7D5410F2F97D682": { name: "深慈街", lat: 22.367276, lng: 114.062922 },
-      // 碧堤半島
       "B47C12A965D7B481": { name: "碧堤半島", lat: 22.367546, lng: 114.061441 },
       "5476E155980E85F9": { name: "碧堤半島", lat: 22.367546, lng: 114.061441 },
-      // 深井村
       "5564CE644A0D7DBE": { name: "深井村", lat: 22.366953, lng: 114.059303 },
       "6B2A3162063E2B8D": { name: "深井村", lat: 22.367137, lng: 114.059220 },
-      // 海美灣
       "62AA23787294A36E": { name: "海美灣", lat: 22.364430, lng: 114.069942 },
       "DA87D4887F5FAF62": { name: "海美灣", lat: 22.364475, lng: 114.069412 },
     };
 
-    // 每條路線可用的候選站（去程為主）
     const routes = [
       { co: "kmb", route: "52X",  dest: "旺角",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481", "5564CE644A0D7DBE"] },
       { co: "kmb", route: "53",   dest: "元朗",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
@@ -124,8 +128,16 @@
     let userLat = null;
     let userLng = null;
     let locationReady = false;
+    let maxAccuracy = 200; // 預設 200 米
 
-    // 計算兩點距離（米）
+    function onAccuracyChange() {
+      maxAccuracy = parseInt(document.getElementById("accuracySelect").value, 10);
+      // 如果目前已有位置，重新檢查是否符合新門檻
+      if (userLat !== null) {
+        requestLocation(true);
+      }
+    }
+
     function distance(lat1, lng1, lat2, lng2) {
       const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -136,13 +148,11 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    // 為某路線找最近站
     function findNearestStop(route) {
       if (route.fixedStop) {
         return { stopId: route.fixedStop, name: route.fixedName || "城巴站", dist: null };
       }
       if (!locationReady || userLat === null) {
-        // 預設：海韻花園 / 深慈街
         const fallback = route.candidates[0];
         return { stopId: fallback, name: stops[fallback]?.name || fallback, dist: null };
       }
@@ -238,6 +248,8 @@
 
     function requestLocation(force = false) {
       const status = document.getElementById("locationStatus");
+      maxAccuracy = parseInt(document.getElementById("accuracySelect").value, 10);
+
       if (!navigator.geolocation) {
         status.textContent = "此裝置不支援定位，使用預設站";
         locationReady = false;
@@ -248,10 +260,22 @@
       status.textContent = "正在取得位置...";
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          const acc = Math.round(pos.coords.accuracy);
+
+          // 檢查是否符合你選擇的精準度門檻
+          if (acc > maxAccuracy) {
+            locationReady = false;
+            userLat = null;
+            userLng = null;
+            status.textContent = `精準度不足（${acc}m > ${maxAccuracy}m），已改用預設站`;
+            update();
+            return;
+          }
+
           userLat = pos.coords.latitude;
           userLng = pos.coords.longitude;
           locationReady = true;
-          status.textContent = `已定位（精準度約 ${Math.round(pos.coords.accuracy)} 米）`;
+          status.textContent = `已定位（精準度 ${acc} 米 ≤ ${maxAccuracy}m）`;
           update();
         },
         (err) => {
@@ -259,7 +283,11 @@
           status.textContent = "定位失敗／已拒絕，使用預設站";
           update();
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: force ? 0 : 30000 }
+        {
+          enableHighAccuracy: true,   // 盡量用 GPS
+          timeout: 10000,
+          maximumAge: force ? 0 : 15000
+        }
       );
     }
 
