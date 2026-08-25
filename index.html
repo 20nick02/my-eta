@@ -2,43 +2,68 @@
 <html lang="zh-HK">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>深井巴士 ETA - 去程</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>深井巴士 ETA（定位版）</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-text-size-adjust: 100%;
+    }
     .eta-badge {
       display: inline-block;
-      min-width: 2.2rem;
+      min-width: 2.1rem;
       text-align: center;
-      padding: 0.15rem 0.4rem;
-      border-radius: 0.35rem;
+      padding: 0.12rem 0.35rem;
+      border-radius: 0.3rem;
       font-weight: 600;
-      margin-right: 0.3rem;
-      font-size: 0.95rem;
+      margin-right: 0.25rem;
+    }
+
+    /* 直向 */
+    @media (orientation: portrait) {
+      .page-title { font-size: 1.15rem; }
+      .page-sub { font-size: 0.75rem; }
+      table { font-size: 0.92rem; }
+      th, td { padding: 0.5rem 0.45rem; }
+      .eta-badge { font-size: 0.95rem; min-width: 2.2rem; }
+      .route-badge { font-size: 0.78rem; padding: 0.18rem 0.45rem; }
+      .stop-info { font-size: 0.68rem; }
+    }
+
+    /* 橫向 */
+    @media (orientation: landscape) {
+      body { padding: 0.35rem !important; }
+      .page-title { font-size: 0.95rem; }
+      .page-sub { font-size: 0.65rem; }
+      header { padding-bottom: 0.25rem !important; margin-bottom: 0.35rem !important; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 0.25rem 0.35rem; }
+      .eta-badge { font-size: 0.8rem; min-width: 1.85rem; padding: 0.08rem 0.25rem; }
+      .route-badge { font-size: 0.7rem; padding: 0.1rem 0.35rem; }
+      .stop-info { font-size: 0.62rem; }
+      footer { margin-top: 0.4rem !important; font-size: 0.62rem !important; }
     }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-2 sm:p-3">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-2">
 
   <div class="max-w-2xl mx-auto">
-    <!-- 標題 -->
-    <header class="mb-3 border-b border-slate-700 pb-2">
-      <h1 class="text-lg sm:text-xl font-bold text-cyan-400">
+    <header class="mb-2 border-b border-slate-700 pb-2">
+      <h1 class="page-title font-bold text-cyan-400 leading-tight">
         深井巴士 ETA
-        <span id="headerTime" class="font-normal text-slate-400 text-sm ml-2">載入中...</span>
+        <span id="headerTime" class="font-normal text-slate-400 text-sm ml-1.5">載入中...</span>
       </h1>
-      <p class="text-xs text-slate-500 mt-0.5">去程：海韻花園 / 深慈街 → 荃灣 / 九龍 / 港島 / 機場</p>
+      <p class="page-sub text-slate-500 mt-0.5" id="locationStatus">正在取得位置...</p>
     </header>
 
-    <!-- 去程列表 -->
     <div class="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-700/70 text-slate-300 text-xs">
+      <table class="w-full">
+        <thead class="bg-slate-700/70 text-slate-300">
           <tr>
-            <th class="p-2 text-left w-[22%]">開往</th>
-            <th class="p-2 text-left w-[18%]">路線</th>
-            <th class="p-2 text-left">分鐘</th>
+            <th class="text-left w-[20%]">開往</th>
+            <th class="text-left w-[16%]">路線</th>
+            <th class="text-left">分鐘 / 車站</th>
           </tr>
         </thead>
         <tbody id="etaBody" class="divide-y divide-slate-700">
@@ -47,31 +72,95 @@
       </table>
     </div>
 
-    <footer class="text-center text-[11px] text-slate-600 mt-4">
-      資料來源：運輸署開放數據　｜　每 10 秒自動更新
+    <div class="mt-2 flex gap-2">
+      <button onclick="requestLocation(true)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-xs py-1.5 rounded text-slate-200">
+        重新定位
+      </button>
+      <button onclick="useDefaultStops()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-xs py-1.5 rounded text-slate-200">
+        使用預設站
+      </button>
+    </div>
+
+    <footer class="text-center text-slate-600 mt-3 text-[11px]">
+      資料來源：運輸署開放數據　｜　每 10 秒更新
     </footer>
   </div>
 
   <script>
-    // ========== 設定 ==========
-    const STOP_HAIYUN = "ED9E5ACF98190E5C";   // 海韻花園
-    const STOP_SHAMTSZ = "5A2A66038B409879";  // 深慈街
+    // ========== 常用站點（含座標）==========
+    const stops = {
+      // 海韻花園（東行）
+      "ED9E5ACF98190E5C": { name: "海韻花園", lat: 22.367721, lng: 114.061674 },
+      "1684F750FEB1342E": { name: "海韻花園", lat: 22.367790, lng: 114.061396 },
+      // 深慈街
+      "5A2A66038B409879": { name: "深慈街", lat: 22.366847, lng: 114.063327 },
+      "D7D5410F2F97D682": { name: "深慈街", lat: 22.367276, lng: 114.062922 },
+      // 碧堤半島
+      "B47C12A965D7B481": { name: "碧堤半島", lat: 22.367546, lng: 114.061441 },
+      "5476E155980E85F9": { name: "碧堤半島", lat: 22.367546, lng: 114.061441 },
+      // 深井村
+      "5564CE644A0D7DBE": { name: "深井村", lat: 22.366953, lng: 114.059303 },
+      "6B2A3162063E2B8D": { name: "深井村", lat: 22.367137, lng: 114.059220 },
+      // 海美灣
+      "62AA23787294A36E": { name: "海美灣", lat: 22.364430, lng: 114.069942 },
+      "DA87D4887F5FAF62": { name: "海美灣", lat: 22.364475, lng: 114.069412 },
+    };
 
+    // 每條路線可用的候選站（去程為主）
     const routes = [
-      { co: "kmb", route: "52X",  dest: "旺角",     stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "53",   dest: "元朗",     stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "234A", dest: "荃灣西",   stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "234B", dest: "荃灣西",   stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "234C", dest: "觀塘",     stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "234D", dest: "觀塘",     stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "261B", dest: "九龍站",   stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "48P",  dest: "火炭",     stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "52P",  dest: "深水埗",   stopId: STOP_HAIYUN, serviceType: 1 },
-      { co: "kmb", route: "A38",  dest: "機場-深慈街",     stopId: STOP_SHAMTSZ, serviceType: 1 },  // 深慈街
-      { co: "ctb", route: "952",  dest: "銅鑼灣",   stopId: "002618" },
+      { co: "kmb", route: "52X",  dest: "旺角",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481", "5564CE644A0D7DBE"] },
+      { co: "kmb", route: "53",   dest: "元朗",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "234A", dest: "荃灣西", candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "234B", dest: "荃灣西", candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "234C", dest: "觀塘",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "234D", dest: "觀塘",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "261B", dest: "九龍站", candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "48P",  dest: "火炭",   candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "52P",  dest: "深水埗", candidates: ["ED9E5ACF98190E5C", "5A2A66038B409879", "B47C12A965D7B481"] },
+      { co: "kmb", route: "A38",  dest: "機場",   candidates: ["5A2A66038B409879", "D7D5410F2F97D682", "ED9E5ACF98190E5C"] },
+      { co: "ctb", route: "952",  dest: "銅鑼灣", candidates: ["002618"], fixedStop: "002618", fixedName: "海韻花園" },
     ];
 
-    // ========== 工具函式 ==========
+    let userLat = null;
+    let userLng = null;
+    let locationReady = false;
+
+    // 計算兩點距離（米）
+    function distance(lat1, lng1, lat2, lng2) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+                Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    // 為某路線找最近站
+    function findNearestStop(route) {
+      if (route.fixedStop) {
+        return { stopId: route.fixedStop, name: route.fixedName || "城巴站", dist: null };
+      }
+      if (!locationReady || userLat === null) {
+        // 預設：海韻花園 / 深慈街
+        const fallback = route.candidates[0];
+        return { stopId: fallback, name: stops[fallback]?.name || fallback, dist: null };
+      }
+
+      let best = null;
+      let bestDist = Infinity;
+      for (const sid of route.candidates) {
+        const s = stops[sid];
+        if (!s) continue;
+        const d = distance(userLat, userLng, s.lat, s.lng);
+        if (d < bestDist) {
+          bestDist = d;
+          best = { stopId: sid, name: s.name, dist: Math.round(d) };
+        }
+      }
+      return best || { stopId: route.candidates[0], name: "預設站", dist: null };
+    }
+
     function renderBadge(mins) {
       let color = "bg-emerald-600";
       if (mins <= 2) color = "bg-red-600";
@@ -79,9 +168,9 @@
       return `<span class="eta-badge ${color} text-white">${mins}</span>`;
     }
 
-    async function fetchKmbEta(stopId, route, serviceType = 1) {
+    async function fetchKmbEta(stopId, route) {
       try {
-        const url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${stopId}/${route}/${serviceType}`;
+        const url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${stopId}/${route}/1`;
         const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
         if (!res.ok) return [];
         const json = await res.json();
@@ -93,9 +182,7 @@
           })
           .filter(m => m !== null)
           .slice(0, 3);
-      } catch {
-        return [];
-      }
+      } catch { return []; }
     }
 
     async function fetchCtbEta(stopId, route) {
@@ -112,48 +199,80 @@
           })
           .filter(m => m !== null)
           .slice(0, 3);
-      } catch {
-        return [];
-      }
+      } catch { return []; }
     }
 
-    async function getEtas(item) {
-      if (item.co === "kmb") {
-        return await fetchKmbEta(item.stopId, item.route, item.serviceType || 1);
-      }
-      if (item.co === "ctb") {
-        return await fetchCtbEta(item.stopId, item.route);
-      }
-      return [];
-    }
-
-    // ========== 主更新 ==========
     async function update() {
-      const now = new Date();
       document.getElementById("headerTime").textContent =
-        now.toLocaleString("zh-HK", { hour12: false });
+        new Date().toLocaleString("zh-HK", { hour12: false });
 
       const rows = await Promise.all(routes.map(async (item) => {
-        const etas = await getEtas(item);
+        const nearest = findNearestStop(item);
+        let etas = [];
+        if (item.co === "kmb") {
+          etas = await fetchKmbEta(nearest.stopId, item.route);
+        } else if (item.co === "ctb") {
+          etas = await fetchCtbEta(nearest.stopId, item.route);
+        }
+
         if (etas.length === 0) return null;
+
+        const distText = nearest.dist !== null ? ` · ${nearest.dist}m` : "";
         return `
           <tr class="hover:bg-slate-700/40">
-            <td class="p-2 text-slate-200">${item.dest}</td>
-            <td class="p-2">
-              <span class="inline-block bg-blue-600 text-white font-bold text-xs px-2 py-0.5 rounded">${item.route}</span>
+            <td class="text-slate-200">${item.dest}</td>
+            <td>
+              <span class="route-badge inline-block bg-blue-600 text-white font-bold rounded">${item.route}</span>
             </td>
-            <td class="p-2">${etas.map(m => renderBadge(m)).join("")}</td>
+            <td>
+              ${etas.map(m => renderBadge(m)).join("")}
+              <div class="stop-info text-slate-500 mt-0.5">${nearest.name}${distText}</div>
+            </td>
           </tr>`;
       }));
 
       const html = rows.filter(Boolean).join("") ||
         `<tr><td colspan="3" class="p-4 text-center text-slate-500">暫時無班次</td></tr>`;
-
       document.getElementById("etaBody").innerHTML = html;
     }
 
+    function requestLocation(force = false) {
+      const status = document.getElementById("locationStatus");
+      if (!navigator.geolocation) {
+        status.textContent = "此裝置不支援定位，使用預設站";
+        locationReady = false;
+        update();
+        return;
+      }
+
+      status.textContent = "正在取得位置...";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userLat = pos.coords.latitude;
+          userLng = pos.coords.longitude;
+          locationReady = true;
+          status.textContent = `已定位（精準度約 ${Math.round(pos.coords.accuracy)} 米）`;
+          update();
+        },
+        (err) => {
+          locationReady = false;
+          status.textContent = "定位失敗／已拒絕，使用預設站";
+          update();
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: force ? 0 : 30000 }
+      );
+    }
+
+    function useDefaultStops() {
+      locationReady = false;
+      userLat = null;
+      userLng = null;
+      document.getElementById("locationStatus").textContent = "已改用預設站（海韻花園／深慈街）";
+      update();
+    }
+
     // 啟動
-    update();
+    requestLocation();
     setInterval(update, 10000);
   </script>
 </body>
