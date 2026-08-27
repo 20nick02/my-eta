@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <title>巴士到站預報</title>
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #fff;
+      --muted: #9aa3b2;
+      --line: #1c2a3a;
+      --badge: #2563eb;
+      --soon: #ef4444;
+      --mid: #f97316;
+      --ok: #22c55e;
+      --card: #0b0f14;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    }
+    body { min-height: 100dvh; padding: 12px 12px 28px; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(22px, 5.4vw, 34px);
+      letter-spacing: .02em;
+      font-weight: 800;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      align-items: center;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #223;
+      background: #0d1218;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #666;
+    }
+    .dot.ok { background: #22c55e; }
+    .dot.warn { background: #f59e0b; }
+    .dot.err { background: #ef4444; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+      align-items: center;
+    }
+    button, select {
+      background: #111827;
+      color: #fff;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+    button { cursor: pointer; }
+    button:active { transform: scale(.98); }
+    button.primary { background: #1d4ed8; border-color: #2563eb; }
+    label.range {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    input[type=range] { width: 120px; }
+    .board {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .board th, .board td {
+      text-align: left;
+      padding: 10px 6px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .board th {
+      font-size: clamp(18px, 4.4vw, 28px);
+      font-weight: 800;
+    }
+    .board td {
+      font-size: clamp(18px, 4.6vw, 30px);
+      font-weight: 700;
+    }
+    .dest { white-space: nowrap; }
+    .stop-cell { font-size: clamp(15px, 3.6vw, 24px); font-weight: 650; }
+    .dist {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .route {
+      display: inline-block;
+      background: var(--badge);
+      color: #fff;
+      border-radius: 8px;
+      min-width: 64px;
+      text-align: center;
+      padding: 2px 8px;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+    .mins { display: flex; flex-wrap: wrap; gap: 6px; }
+    .min {
+      min-width: 42px;
+      text-align: center;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-weight: 800;
+      background: var(--ok);
+      color: #fff;
+    }
+    .min.soon { background: var(--soon); }
+    .min.mid { background: var(--mid); }
+    .min.none { background: #334155; color: #cbd5e1; font-size: 16px; min-width: auto; }
+    .status {
+      color: var(--muted);
+      padding: 18px 4px;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hint { color: #64748b; font-size: 13px; margin-top: 16px; line-height: 1.6; }
+    .routes-legend { color: #94a3b8; font-size: 13px; }
+    .section {
+      margin-top: 18px;
+    }
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 4px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #1e3a5f;
+      font-size: clamp(20px, 5vw, 30px);
+      font-weight: 800;
+    }
+    .section-title .tag {
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+    .section.inbound .section-title {
+      border-bottom-color: #3f2a12;
+    }
+    .section.inbound .route { background: #b45309; }
+    .section-title .count {
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-left: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 id="title">巴士到站預報</h1>
+      <div class="meta">
+        <span id="clock">--</span>
+        <span class="pill"><span id="gpsDot" class="dot"></span><span id="gpsText">定位中…</span></span>
+        <span class="routes-legend">52X · 234A · 234B · 952 · 53 · A38</span>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <button class="primary" id="btnLocate">重新定位</button>
+      <button id="btnRefresh">更新班次</button>
+      <label class="range">半徑
+        <input id="radius" type="range" min="200" max="1200" step="50" value="500" />
+        <span id="radiusLabel">500米</span>
+      </label>
+    </div>
+
+    <div id="boardWrap">
+      <p id="globalStatus" class="status">正在載入路線及車站資料…</p>
+      <section class="section outbound" id="secOut" hidden>
+        <h2 class="section-title">去程 <span class="tag">開往荃灣／旺角／銅鑼灣／機場</span><span class="count" id="outCount"></span></h2>
+        <table class="board">
+          <thead>
+            <tr>
+              <th>開往</th>
+              <th>路線</th>
+              <th>車站</th>
+              <th>分鐘</th>
+            </tr>
+          </thead>
+          <tbody id="rowsOut"></tbody>
+        </table>
+      </section>
+      <section class="section inbound" id="secIn" hidden>
+        <h2 class="section-title">回程 <span class="tag">開往屯門／元朗／浪翠園／荃威花園</span><span class="count" id="inCount"></span></h2>
+        <table class="board">
+          <thead>
+            <tr>
+              <th>開往</th>
+              <th>路線</th>
+              <th>車站</th>
+              <th>分鐘</th>
+            </tr>
+          </thead>
+          <tbody id="rowsIn"></tbody>
+        </table>
+      </section>
+    </div>
+    <p class="hint">
+      開啟時會用 GPS 找出附近的指定路線巴士站，並顯示九巴／龍運／城巴實時到站時間。
+      資料來自香港政府開放數據。定位需允許瀏覽器存取位置；若在檔案直接開啟可能無法定位，請用本機伺服器或放到 GitHub Pages。
+    </p>
+  </div>
+
+<script>
+const TARGET_ROUTES = ["52X", "234A", "234B", "952", "53", "A38"];
+const KMB_ROUTES = [
+  { route: "52X", serviceTypes: ["1"] },
+  { route: "234A", serviceTypes: ["1", "2"] },
+  { route: "234B", serviceTypes: ["1"] },
+  { route: "53", serviceTypes: ["1"] },
+  { route: "A38", serviceTypes: ["1"] }
+];
+const CTB_ROUTES = ["952"];
+const FALLBACK = { lat: 22.36772, lng: 114.06167, label: "深井海韻花園（預設）" };
+const CACHE_MS = 24 * 60 * 60 * 1000;
+const REFRESH_MS = 20000;
+
+const KMB_STOPS_URL = "https://data.etabus.gov.hk/v1/transport/kmb/stop";
+const KMB_ROUTE_STOP = (route, dir, st) =>
+  `https://data.etabus.gov.hk/v1/transport/kmb/route-stop/${route}/${dir}/${st}`;
+const KMB_STOP_ETA = (stop) =>
+  `https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stop}`;
+const CTB_ROUTE_STOP = (route, dir) =>
+  `https://rt.data.gov.hk/v2/transport/citybus/route-stop/ctb/${route}/${dir}`;
+const CTB_STOP = (id) =>
+  `https://rt.data.gov.hk/v2/transport/citybus/stop/${id}`;
+const CTB_ETA = (stop, route) =>
+  `https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${stop}/${route}`;
+
+const state = {
+  kmbStops: new Map(),
+  ctbStops: new Map(),
+  routeIndex: [], // {co, route, stopId, lat, lng, stopName}
+  pos: null,
+  posLabel: "",
+  radius: 500,
+  loading: false
+};
+
+function $(id) { return document.getElementById(id); }
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function cleanStopName(name) {
+  return String(name || "")
+    .replace(/\s*\([A-Z]{1,3}\d+[A-Z]?\)$/i, "")
+    .replace(/, .+$/, "")
+    .replace(/（.*?）/g, "")
+    .trim();
+}
+
+function shortDest(name) {
+  const n = String(name || "").replace(/\s+/g, "");
+  const map = [
+    [/機場/, "機場"],
+    [/銅鑼灣/, "銅鑼灣"],
+    [/金鐘/, "金鐘"],
+    [/旺角/, "旺角"],
+    [/荃灣西/, "荃灣西"],
+    [/如心/, "荃灣"],
+    [/荃威/, "荃威花園"],
+    [/浪翠園/, "浪翠園"],
+    [/屯門/, "屯門"],
+    [/元朗/, "元朗"],
+    [/形點/, "元朗"],
+    [/置樂/, "屯門"]
+  ];
+  for (const [re, label] of map) if (re.test(n)) return label;
+  return name.replace(/[（(].*$/, "").trim() || name;
+}
+
+// 以終點判斷去程／回程（不用官方 O/I，因各線定義不一致）
+const ROUTE_DIR = {
+  "52X": { out: /旺角/, inn: /屯門/ },
+  "234A": { out: /荃灣/, inn: /浪翠|深井|青龍頭/ },
+  "234B": { out: /荃灣/, inn: /浪翠|深井/ },
+  "53": { out: /荃灣|如心/, inn: /元朗|形點/ },
+  "952": { out: /銅鑼灣|金鐘|摩頓/, inn: /屯門|置樂/ },
+  "A38": { out: /機場/, inn: /荃威|荃灣/ }
+};
+
+function rowSide(row) {
+  const text = `${row.destFull || ""} ${row.dest || ""}`;
+  const rule = ROUTE_DIR[row.route];
+  if (rule) {
+    if (rule.out.test(text)) return "out";
+    if (rule.inn.test(text)) return "in";
+  }
+  return row.dir === "I" ? "in" : "out";
+}
+
+function minutesUntil(iso) {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - Date.now();
+  return Math.max(0, Math.round(ms / 60000));
+}
+
+function minClass(m) {
+  if (m <= 5) return "soon";
+  if (m <= 12) return "mid";
+  return "";
+}
+
+function setGps(status, text) {
+  $("gpsDot").className = "dot " + status;
+  $("gpsText").textContent = text;
+}
+
+function tickClock() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  $("clock").textContent = `${pad(d.getDate())}-${months[d.getMonth()]}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${url}`);
+  return res.json();
+}
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || Date.now() - obj.t > CACHE_MS) return null;
+    return obj.v;
+  } catch { return null; }
+}
+function cacheSet(key, v) {
+  try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v })); } catch {}
+}
+
+async function loadKmbStops() {
+  const cached = cacheGet("kmbStopsV1");
+  if (cached) {
+    cached.forEach(s => state.kmbStops.set(s.stop, s));
+    return;
+  }
+  const json = await fetchJson(KMB_STOPS_URL);
+  const list = json.data || [];
+  list.forEach(s => state.kmbStops.set(s.stop, s));
+  cacheSet("kmbStopsV1", list);
+}
+
+async function loadRouteIndex() {
+  const cached = cacheGet("routeIndexV2");
+  if (cached) {
+    state.routeIndex = cached;
+    cached.filter(x => x.co === "CTB").forEach(x => {
+      if (!state.ctbStops.has(x.stopId)) {
+        state.ctbStops.set(x.stopId, { stop: x.stopId, name_tc: x.stopName, lat: x.lat, long: x.lng });
+      }
+    });
+    return;
+  }
+
+  const index = [];
+  const dirs = ["outbound", "inbound"];
+
+  for (const r of KMB_ROUTES) {
+    for (const dir of dirs) {
+      for (const st of r.serviceTypes) {
+        try {
+          const json = await fetchJson(KMB_ROUTE_STOP(r.route, dir, st));
+          for (const item of json.data || []) {
+            const stop = state.kmbStops.get(item.stop);
+            if (!stop) continue;
+            index.push({
+              co: "KMB",
+              route: r.route,
+              stopId: item.stop,
+              lat: Number(stop.lat),
+              lng: Number(stop.long),
+              stopName: cleanStopName(stop.name_tc)
+            });
+          }
+        } catch (e) {
+          console.warn("KMB route-stop fail", r.route, dir, st, e);
+        }
+      }
+    }
+  }
+
+  const ctbStopIds = new Set();
+  for (const route of CTB_ROUTES) {
+    for (const dir of dirs) {
+      try {
+        const json = await fetchJson(CTB_ROUTE_STOP(route, dir));
+        for (const item of json.data || []) ctbStopIds.add(item.stop);
+      } catch (e) {
+        console.warn("CTB route-stop fail", route, dir, e);
+      }
+    }
+  }
+
+  const ids = [...ctbStopIds];
+  const chunk = 8;
+  for (let i = 0; i < ids.length; i += chunk) {
+    const part = ids.slice(i, i + chunk);
+    await Promise.all(part.map(async id => {
+      try {
+        const json = await fetchJson(CTB_STOP(id));
+        const s = json.data;
+        if (!s) return;
+        state.ctbStops.set(id, s);
+        index.push({
+          co: "CTB",
+          route: "952",
+          stopId: id,
+          lat: Number(s.lat),
+          lng: Number(s.long),
+          stopName: cleanStopName(s.name_tc)
+        });
+      } catch (e) {
+        console.warn("CTB stop fail", id, e);
+      }
+    }));
+  }
+
+  // de-dupe
+  const seen = new Set();
+  state.routeIndex = index.filter(x => {
+    const k = `${x.co}|${x.route}|${x.stopId}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return Number.isFinite(x.lat) && Number.isFinite(x.lng);
+  });
+  cacheSet("routeIndexV2", state.routeIndex);
+}
+
+function nearbyEntries() {
+  if (!state.pos) return [];
+  const { lat, lng } = state.pos;
+  const out = [];
+  for (const item of state.routeIndex) {
+    const d = haversine(lat, lng, item.lat, item.lng);
+    if (d <= state.radius) out.push({ ...item, dist: d });
+  }
+  out.sort((a, b) => a.dist - b.dist);
+  return out;
+}
+
+async function fetchEtas(entries) {
+  const kmbStops = [...new Set(entries.filter(e => e.co === "KMB").map(e => e.stopId))];
+  const ctbStops = [...new Set(entries.filter(e => e.co === "CTB").map(e => e.stopId))];
+  const wantedKmb = new Set(KMB_ROUTES.map(r => r.route));
+
+  const rows = [];
+
+  await Promise.all(kmbStops.map(async stopId => {
+    try {
+      const json = await fetchJson(KMB_STOP_ETA(stopId));
+      const list = (json.data || []).filter(x => wantedKmb.has(x.route) && x.eta);
+      const grouped = new Map();
+      for (const x of list) {
+        const key = `${x.route}|${x.dir}|${x.dest_tc}|${stopId}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(x);
+      }
+      for (const [key, arr] of grouped) {
+        arr.sort((a, b) => (a.eta_seq || 0) - (b.eta_seq || 0));
+        const first = arr[0];
+        const meta = entries.find(e => e.co === "KMB" && e.stopId === stopId && e.route === first.route);
+        rows.push({
+          dest: shortDest(first.dest_tc),
+          destFull: first.dest_tc,
+          dir: first.dir || "O",
+          route: first.route,
+          stop: meta ? meta.stopName : stopId,
+          dist: meta ? meta.dist : 99999,
+          mins: arr.map(x => minutesUntil(x.eta)).filter(m => m !== null),
+          remark: arr.map(x => x.rmk_tc).filter(Boolean)
+        });
+      }
+    } catch (e) {
+      console.warn("KMB eta fail", stopId, e);
+    }
+  }));
+
+  await Promise.all(ctbStops.map(async stopId => {
+    try {
+      const json = await fetchJson(CTB_ETA(stopId, "952"));
+      const list = (json.data || []).filter(x => x.eta);
+      const grouped = new Map();
+      for (const x of list) {
+        const key = `${x.dir}|${x.dest_tc}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(x);
+      }
+      for (const arr of grouped.values()) {
+        arr.sort((a, b) => (a.eta_seq || 0) - (b.eta_seq || 0));
+        const first = arr[0];
+        const meta = entries.find(e => e.co === "CTB" && e.stopId === stopId);
+        rows.push({
+          dest: shortDest(first.dest_tc),
+          destFull: first.dest_tc,
+          dir: first.dir || "O",
+          route: "952",
+          stop: meta ? meta.stopName : stopId,
+          dist: meta ? meta.dist : 99999,
+          mins: arr.map(x => minutesUntil(x.eta)).filter(m => m !== null),
+          remark: arr.map(x => x.rmk_tc).filter(Boolean)
+        });
+      }
+    } catch (e) {
+      console.warn("CTB eta fail", stopId, e);
+    }
+  }));
+
+  rows.sort((a, b) => a.dist - b.dist || (a.mins[0] ?? 999) - (b.mins[0] ?? 999) || a.route.localeCompare(b.route, "zh-Hant"));
+  return rows;
+}
+
+function rowHtml(r) {
+  const mins = r.mins.length
+    ? r.mins.slice(0, 3).map(m => `<span class="min ${minClass(m)}">${m}</span>`).join("")
+    : `<span class="min none">暫無班次</span>`;
+  const dist = Number.isFinite(r.dist) ? `${Math.round(r.dist)}米` : "";
+  return `<tr>
+    <td class="dest">${escapeHtml(r.dest)}</td>
+    <td><span class="route">${escapeHtml(r.route)}</span></td>
+    <td class="stop-cell">${escapeHtml(r.stop)}<span class="dist">${dist}</span></td>
+    <td><div class="mins">${mins}</div></td>
+  </tr>`;
+}
+
+function fillTable(tbodyId, list, emptyText) {
+  const tb = $(tbodyId);
+  if (!list.length) {
+    tb.innerHTML = `<tr><td colspan="4" class="status">${emptyText}</td></tr>`;
+    return;
+  }
+  tb.innerHTML = list.map(rowHtml).join("");
+}
+
+function renderRows(rows, message) {
+  const status = $("globalStatus");
+  const secOut = $("secOut");
+  const secIn = $("secIn");
+  if (message) {
+    status.hidden = false;
+    status.textContent = message;
+    secOut.hidden = true;
+    secIn.hidden = true;
+    return;
+  }
+  status.hidden = true;
+  if (!rows || !rows.length) {
+    status.hidden = false;
+    status.textContent = `附近 ${state.radius} 米內沒有指定路線車站。可加大半徑或移近巴士站。`;
+    secOut.hidden = true;
+    secIn.hidden = true;
+    return;
+  }
+
+  const outbound = rows.filter(r => rowSide(r) === "out");
+  const inbound = rows.filter(r => rowSide(r) === "in");
+
+  secOut.hidden = false;
+  secIn.hidden = false;
+  $("outCount").textContent = outbound.length ? `${outbound.length} 班` : "";
+  $("inCount").textContent = inbound.length ? `${inbound.length} 班` : "";
+  fillTable("rowsOut", outbound, "暫無去程班次");
+  fillTable("rowsIn", inbound, "暫無回程班次");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[c]));
+}
+
+async function refreshEtas() {
+  if (!state.pos) return;
+  const near = nearbyEntries();
+  if (!near.length) {
+    renderRows([], null);
+    return;
+  }
+  renderRows(null, `找到 ${near.length} 個附近站點，正在讀取到站時間…`);
+  try {
+    const rows = await fetchEtas(near);
+    renderRows(rows);
+  } catch (e) {
+    renderRows(null, "讀取到站時間失敗：" + e.message);
+  }
+}
+
+function usePosition(lat, lng, label, gpsOk) {
+  state.pos = { lat, lng };
+  state.posLabel = label;
+  setGps(gpsOk ? "ok" : "warn", label);
+  $("title").textContent = "附近巴士預報";
+  refreshEtas();
+}
+
+function locate() {
+  setGps("", "定位中…");
+  if (!navigator.geolocation) {
+    usePosition(FALLBACK.lat, FALLBACK.lng, FALLBACK.label + "（瀏覽器不支援定位）", false);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy || 0);
+      usePosition(lat, lng, `已定位 · 準確約 ${acc}米`, true);
+    },
+    err => {
+      usePosition(FALLBACK.lat, FALLBACK.lng, FALLBACK.label + "（未能定位）", false);
+      console.warn(err);
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
+  );
+}
+
+async function boot() {
+  tickClock();
+  setInterval(tickClock, 1000);
+  try {
+    renderRows(null, "正在載入車站資料（首次可能需十數秒）…");
+    await loadKmbStops();
+    await loadRouteIndex();
+    locate();
+  } catch (e) {
+    renderRows(null, "載入車站資料失敗：" + e.message);
+  }
+}
+
+$("btnLocate").addEventListener("click", locate);
+$("btnRefresh").addEventListener("click", refreshEtas);
+$("radius").addEventListener("input", e => {
+  state.radius = Number(e.target.value);
+  $("radiusLabel").textContent = state.radius + "米";
+});
+$("radius").addEventListener("change", refreshEtas);
+setInterval(() => { if (!document.hidden) refreshEtas(); }, REFRESH_MS);
+
+boot();
+</script>
+</body>
+</html>
